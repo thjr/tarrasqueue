@@ -1,0 +1,8 @@
+queue_test_parallel="2"
+queue_test_consumer="sleep 10;echo %s;sleep 10"
+
+queue_dl_parallel="1"
+queue_dl_consumer="/usr/local/scripts/download.sh \"%s\""
+
+queue_encode_parallel=1
+queue_encode_consumer="/usr/local/scripts/encode.sh \"%s\""
