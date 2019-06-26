@@ -4,35 +4,50 @@ FIFO_LOCATION=/tmp/
 TIMEOUT=5
 
 # Print usage
-[[ $# -lt 1 ]] && echo Usage: $0 Queue parameter [parameter] && exit
+[[ $# -lt 1 ]] && echo Usage: $0 [queue_name] [parameter] [parameter2] OR $0 --COMMAND [parameter] && exit
 
+COMMAND=$0
 QUEUE=$1
 PARAMETER=$2
+PARAMETER2=$3
 
 # read config
 . /etc/tq.conf
 
-PARALLEL_VARIABLE=queue_$1_parallel
-CONSUMER_VARIABLE=queue_$1_consumer
+configure() {
+	PARALLEL_VARIABLE="queue_${QUEUE}_parallel"
+	CONSUMER_VARIABLE="queue_${QUEUE}_consumer"
 
-CONSUMER_TEMPLATE="${!CONSUMER_VARIABLE}"
-PARALLEL=${!PARALLEL_VARIABLE}
+	CONSUMER_TEMPLATE="${!CONSUMER_VARIABLE}"
+	PARALLEL=${!PARALLEL_VARIABLE}
 
-[[ ! $CONSUMER_TEMPLATE ]] && echo Queue $QUEUE not configured
+	[[ ! $CONSUMER_TEMPLATE ]] && echo Queue $QUEUE not configured && exit -1
 
-if [ "$PARAMETER" ]; then
-	CONSUMER=${CONSUMER_TEMPLATE/\%s/$PARAMETER}
-else
 	CONSUMER=$CONSUMER_TEMPLATE
-fi
+	if [ "$PARAMETER" ]; then
+		CONSUMER=${CONSUMER/\%s/$PARAMETER}
+	fi
 
-FIFO_FILE=$FIFO_LOCATION$QUEUE.fifo
-CONSUMER_COUNT=`ps -auxww|grep "$0"|grep -e "${QUEUE} d" -e "${QUEUE} c"|wc -l`
+	if [ "$PARAMETER2" ]; then
+		CONSUMER=${CONSUMER/\%s/$PARAMETER2}
+	fi
+
+	FIFO_FILE=$FIFO_LOCATION$QUEUE.fifo
+	CONSUMER_COUNT=`ps -auxww|grep "${COMMAND}"|grep -e "${QUEUE} d" -e "${QUEUE} c"|wc -l`
+}
 
 main() {
+	isCommand
+
+	if [ $? == 1 ]; then
+		runCommand
+		return
+	fi
+
+	configure
 	create_fifo_file
 
-	if [ "$PARAMETER" == "" ] || [ "$PARAMETER" == "consume" ]; then
+	if [ "${PARAMETER}" == "" ] || [ "${PARAMETER}" == "consume" ]; then
 		consumer false
 	elif [ "$PARAMETER" = "debug" ]; then
 		consumer true
@@ -47,6 +62,29 @@ main() {
 #			echo Sending "${CONSUMER}" to queue
 		      	echo "$CONSUMER" > $FIFO_FILE
 
+	fi
+}
+
+isCommand() {
+	if [[ $QUEUE == --* ]]; then 
+		return 1
+	else 
+		return 0
+	fi
+}
+
+printQueues() {
+	for var in ${!queue_@}; do
+		if [[ $var == *_consumer ]]; then
+			tmp=${var#*_}
+			echo ${tmp%_*}
+		fi
+	done
+}
+
+runCommand() {
+	if [ $QUEUE == '--queues' ]; then
+		printQueues
 	fi
 }
 
@@ -68,7 +106,7 @@ consume_fifo() {
       	done
 }
 
-consumer(){
+consumer() {
       	# Associate file descriptor 3 to the FIFO
       	exec 3<"$FIFO_FILE"
 
