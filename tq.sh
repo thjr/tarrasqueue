@@ -33,59 +33,40 @@ configure() {
 	fi
 
 	FIFO_FILE=$FIFO_LOCATION$QUEUE.fifo
-	CONSUMER_COUNT=`ps -auxww|grep "${COMMAND}"|grep -e "${QUEUE} d" -e "${QUEUE} c"|wc -l`
+	# for some weird reason there is an extra consume?!?
+	CONSUMER_COUNT=$((`ps -auxww|grep "tq-consume"|grep -e "${QUEUE}"|wc -l` - 1))
+
+#	echo "consumer count" $CONSUMER_COUNT
 }
 
 main() {
-	isCommand
-
-	if [ $? == 1 ]; then
-		runCommand
-		return
-	fi
-
 	configure
 	create_fifo_file
 
-	if [ "${PARAMETER}" == "" ] || [ "${PARAMETER}" == "consume" ]; then
+	if [[ $COMMAND == *tq-consume* ]]; then
 		consumer false
-	elif [ "$PARAMETER" = "debug" ]; then
+	elif [[ $COMMAND == *tq-debug* ]]; then
 		consumer true
 	else
-		      	# start consumer if needed
-			if [ "$CONSUMER_COUNT" -lt "$PARALLEL" ]; then
-#				echo starting new consumer
-				eval "$0 $QUEUE consume" &
-			fi
+    # start consumer if needed
+#    echo consumer count $CONSUMER_COUNT max $PARALLEL
 
-		      	# add command to the queue
-#			echo Sending "${CONSUMER}" to queue
-		      	echo "$CONSUMER" > $FIFO_FILE
+    if [ "$CONSUMER_COUNT" -lt "$PARALLEL" ]; then
+      start_new_consumer $QUEUE
+    fi
 
+    add_to_queue "$CONSUMER" $FIFO_FILE
 	fi
 }
 
-isCommand() {
-	if [[ $QUEUE == --* ]]; then 
-		return 1
-	else 
-		return 0
-	fi
+start_new_consumer() {
+#	echo starting new consumer for $1
+	eval "tq-consume $1" &
 }
 
-printQueues() {
-	for var in ${!queue_@}; do
-		if [[ $var == *_consumer ]]; then
-			tmp=${var#*_}
-			echo ${tmp%_*}
-		fi
-	done
-}
-
-runCommand() {
-	if [ $QUEUE == '--queues' ]; then
-		printQueues
-	fi
+add_to_queue() {
+#	echo Sending "$1" to queue "$2"
+  echo "$1" > $2
 }
 
 create_fifo_file() {
@@ -95,20 +76,26 @@ create_fifo_file() {
 }
 
 consume_fifo() {
-      	while read -u 3 -t $TIMEOUT line; do
-#		echo running "${line}"
+#  echo "start consuming fifo with timeout " $TIMEOUT
 
-		if [ $DEBUG == '1' ]; then
-			(eval "${line}")&
-		else 
-        		(eval "${line}")&>/tmp/$QUEUE.log
-		fi
-      	done
+  while read -u 3 -t $TIMEOUT line; do
+#    echo running "${line}"
+
+    if [ $DEBUG == '1' ]; then
+      (eval "${line}")&
+    else
+      (eval "${line}")&>>/tmp/$QUEUE.log
+    fi
+  done
+
+#  echo "consumer done!"
 }
 
 consumer() {
-      	# Associate file descriptor 3 to the FIFO
-      	exec 3<"$FIFO_FILE"
+#  echo "running consumer process for " $FIFO_FILE
+
+  # Associate file descriptor 3 to the FIFO
+  exec 3<"$FIFO_FILE"
 
 	if [ $1 == 'true' ]; then
 		DEBUG=1
@@ -124,4 +111,3 @@ consumer() {
 }
 
 main
-
