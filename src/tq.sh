@@ -39,9 +39,13 @@ configure() {
 
   FIFO_FILE=${FIFO_LOCATION}${QUEUE}.fifo
 
-  CONSUMER_COUNT=$((`ps -auxww|grep "tq-consume"|grep -e "${QUEUE}"|wc -l` ))
+  CONSUMER_COUNT="$(get_consumer_count)"
 
-#	echo "consumer count" $CONSUMER_COUNT
+#  echo "consumer count" $CONSUMER_COUNT $CONSUMER_COUNT2
+}
+
+get_consumer_count() {
+  echo `ls -1 ${CONSUMER_DIRECTORY}| wc -l`
 }
 
 main() {
