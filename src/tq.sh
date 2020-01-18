@@ -11,6 +11,11 @@ QUEUE=$1
 PARAMETER=$2
 PARAMETER2=$3
 
+# create directories
+QUEUE_DIRECTORY=/tmp/tq/${QUEUE}
+CONSUMER_DIRECTORY=${QUEUE_DIRECTORY}/consumers
+mkdir -p $CONSUMER_DIRECTORY
+
 # read config
 . /etc/tq.conf
 
@@ -32,7 +37,7 @@ configure() {
     CONSUMER=${CONSUMER/\%s/$PARAMETER2}
   fi
 
-  FIFO_FILE=$FIFO_LOCATION$QUEUE.fifo
+  FIFO_FILE=${FIFO_LOCATION}${QUEUE}.fifo
 
   CONSUMER_COUNT=$((`ps -auxww|grep "tq-consume"|grep -e "${QUEUE}"|wc -l` ))
 
@@ -82,9 +87,9 @@ consume_fifo() {
 #    echo running "${line}"
 
     if [ $DEBUG == '1' ]; then
-      eval "${line}" &
+      eval "${line}"
     else
-      eval "${line}" &>>/tmp/$QUEUE.log & disown
+      eval "${line}" >>${QUEUE_DIRECTORY}/$$.log
     fi
   done
 
@@ -93,6 +98,10 @@ consume_fifo() {
 
 consumer() {
 #  echo "running consumer process for " $FIFO_FILE
+
+  # save pidfile
+  CONSUMER_PID=$$
+  echo $QUEUE >> ${CONSUMER_DIRECTORY}/${CONSUMER_PID}
 
   # Associate file descriptor 3 to the FIFO
   exec 3<"$FIFO_FILE"
@@ -108,6 +117,9 @@ consumer() {
   else
     consume_fifo
   fi
+
+  # remove pidfile
+  rm ${CONSUMER_DIRECTORY}/${CONSUMER_PID}
 }
 
 main
