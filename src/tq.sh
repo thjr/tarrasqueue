@@ -1,8 +1,5 @@
 #!/usr/local/bin/bash
 
-FIFO_LOCATION=/tmp/
-TIMEOUT=5
-
 # Print usage
 [[ $# -lt 1 ]] && echo Usage: $0 [queue_name] [parameter] [parameter2] OR $0 --COMMAND [parameter] && exit
 
@@ -12,9 +9,11 @@ PARAMETER=$2
 PARAMETER2=$3
 
 # create directories
-QUEUE_DIRECTORY=/tmp/tq/${QUEUE}
-CONSUMER_DIRECTORY=${QUEUE_DIRECTORY}/consumers
+QUEUE_BASE_DIRECTORY=/tmp/tq/${QUEUE}
+QUEUE_DIRECTORY=${QUEUE_BASE_DIRECTORY}/queue
+CONSUMER_DIRECTORY=${QUEUE_BASE_DIRECTORY}/consumers
 mkdir -p $CONSUMER_DIRECTORY
+mkdir -p $QUEUE_DIRECTORY
 
 # read config
 . /etc/tq.conf
@@ -37,8 +36,6 @@ configure() {
     CONSUMER=${CONSUMER/\%s/$PARAMETER2}
   fi
 
-  FIFO_FILE=${FIFO_LOCATION}${QUEUE}.fifo
-
   CONSUMER_COUNT="$(get_consumer_count)"
 
 #  echo "consumer count" $CONSUMER_COUNT $CONSUMER_COUNT2
@@ -48,9 +45,13 @@ get_consumer_count() {
   echo `ls -1 ${CONSUMER_DIRECTORY}| wc -l`
 }
 
+delete_old_logs() {
+  find ${QUEUE_BASE_DIRECTORY}/*.log -mtime +7 -exec rm {} \;
+}
+
 main() {
   configure
-  create_fifo_file
+  delete_old_logs
 
   if [[ $COMMAND == *tq-consume* ]]; then
     consumer false
@@ -64,51 +65,44 @@ main() {
       start_new_consumer $QUEUE
     fi
 
-    add_to_queue "$CONSUMER" $FIFO_FILE
+    add_to_queue "$CONSUMER"
   fi
 }
 
 start_new_consumer() {
 #  echo starting new consumer for $1
-  eval "tq-consume $1" &>>/tmp/$QUEUE.log & disown
+  eval "tq-consume $1" &>>$QUEUE_BASE_DIRECTORY/consumer.log & disown
 }
 
 add_to_queue() {
-# echo Sending "$1" to queue "$2"
-  echo "$1" > $2
+  echo "$1" > ${QUEUE_DIRECTORY}/$$
 }
 
-create_fifo_file() {
-	# Create the FIFO file if missing
+consume_queue() {
+  for filename in ${QUEUE_DIRECTORY}/*; do
+    [ -e "$filename" ] || continue
 
-  [[ -e "$FIFO_FILE" ]] || mkfifo "$FIFO_FILE"
-}
-
-consume_fifo() {
-#  echo "start consuming fifo with timeout " $TIMEOUT
-
-  while read -u 3 -t $TIMEOUT line; do
-#    echo running "${line}"
+    read -r line<$filename
 
     if [ $DEBUG == '1' ]; then
       eval "${line}"
     else
-      eval "${line}" >>${QUEUE_DIRECTORY}/$$.log
+      eval "${line}" >>${QUEUE_BASE_DIRECTORY}/$$.log
     fi
+
+    rm $filename
   done
 
 #  echo "consumer done!"
 }
 
 consumer() {
-#  echo "running consumer process for " $FIFO_FILE
-
   # save pidfile
-  CONSUMER_PID=$$
-  echo $QUEUE >> ${CONSUMER_DIRECTORY}/${CONSUMER_PID}
+  PIDFILE=${CONSUMER_DIRECTORY}/$$
+  echo $QUEUE >> ${PIDFILE}
 
-  # Associate file descriptor 3 to the FIFO
-  exec 3<"$FIFO_FILE"
+  # print date to log
+  date
 
   if [ $1 == 'true' ]; then
     DEBUG=1
@@ -117,13 +111,13 @@ consumer() {
   fi
 
   if [ $DEBUG == '1' ]; then
-    while sleep 1; do consume_fifo; done
+    while sleep 1; do consume_queue; done
   else
-    consume_fifo
+    consume_queue
   fi
 
   # remove pidfile
-  rm ${CONSUMER_DIRECTORY}/${CONSUMER_PID}
+  rm ${PIDFILE}
 }
 
 main
