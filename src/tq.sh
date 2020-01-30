@@ -84,13 +84,13 @@ consume_queue() {
 
     read -r line<$filename
 
+    rm $filename
+
     if [ $DEBUG == '1' ]; then
       eval "${line}"
     else
       eval "${line}" >>${QUEUE_BASE_DIRECTORY}/$$.log
     fi
-
-    rm $filename
   done
 
 #  echo "consumer done!"
