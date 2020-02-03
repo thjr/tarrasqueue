@@ -6,3 +6,6 @@ queue_dl_consumer="/usr/local/scripts/download.sh \"%s\""
 
 queue_encode_parallel=1
 queue_encode_consumer="/usr/local/scripts/encode.sh \"%s\""
+
+queue_purge_parallel=1
+queue_purge_consumer="rm -rf /tmp/tq"

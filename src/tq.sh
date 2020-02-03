@@ -3,7 +3,6 @@
 # Print usage
 [[ $# -lt 1 ]] && echo Usage: $0 [queue_name] [parameter] [parameter2] OR $0 --COMMAND [parameter] && exit
 
-COMMAND=$0
 QUEUE=$1
 PARAMETER=$2
 PARAMETER2=$3
@@ -46,41 +45,41 @@ get_consumer_count() {
 }
 
 delete_old_logs() {
-  find ${QUEUE_BASE_DIRECTORY}/*.log -mtime +7 -exec rm {} \;
+  find ${QUEUE_BASE_DIRECTORY}/*.log -mtime +7 -exec rm {} \; 2>/dev/null
 }
 
 main() {
   configure
   delete_old_logs
 
-  if [[ $COMMAND == *tq-consume* ]]; then
-    consumer false
-  elif [[ $COMMAND == *tq-debug* ]]; then
-    consumer true
-  else
+  add_to_queue "$CONSUMER"
     # start consumer if needed
 #    echo consumer count $CONSUMER_COUNT max $PARALLEL
 
-    if [ "$CONSUMER_COUNT" -lt "$PARALLEL" ]; then
-      start_new_consumer $QUEUE
-    fi
-
-    add_to_queue "$CONSUMER"
+  if [ "$CONSUMER_COUNT" -lt "$PARALLEL" ]; then
+    start_new_consumer $QUEUE &
   fi
-}
-
-start_new_consumer() {
-#  echo starting new consumer for $1
-  eval "tq-consume $1" &>>$QUEUE_BASE_DIRECTORY/consumer.log & disown
 }
 
 add_to_queue() {
   echo "$1" > ${QUEUE_DIRECTORY}/$$
 }
 
-consume_queue() {
+get_first_file() {
   for filename in ${QUEUE_DIRECTORY}/*; do
     [ -e "$filename" ] || continue
+
+    echo $filename
+
+    break
+  done
+}
+
+consume_queue() {
+  for (( ; ; ))
+  do
+    filename="$(get_first_file)"
+    [ -e "$filename" ] || break
 
     read -r line<$filename
 
@@ -96,13 +95,10 @@ consume_queue() {
 #  echo "consumer done!"
 }
 
-consumer() {
+start_new_consumer() {
   # save pidfile
   PIDFILE=${CONSUMER_DIRECTORY}/$$
   echo $QUEUE >> ${PIDFILE}
-
-  # print date to log
-  date
 
   if [ $1 == 'true' ]; then
     DEBUG=1
