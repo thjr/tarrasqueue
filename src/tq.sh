@@ -88,7 +88,7 @@ consume_queue() {
     if [ $DEBUG == '1' ]; then
       eval "${line}"
     else
-      eval "${line}" >>${QUEUE_BASE_DIRECTORY}/$$.log
+      eval "${line}" >>${QUEUE_BASE_DIRECTORY}/$$.log 2>&1
     fi
   done
 
