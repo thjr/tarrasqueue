@@ -36,8 +36,6 @@ configure() {
   fi
 
   CONSUMER_COUNT="$(get_consumer_count)"
-
-#  echo "consumer count" $CONSUMER_COUNT $CONSUMER_COUNT2
 }
 
 get_consumer_count() {
@@ -48,9 +46,28 @@ delete_old_logs() {
   find ${QUEUE_BASE_DIRECTORY}/*.log -mtime +7 -exec rm {} \; 2>/dev/null
 }
 
+check_pid_files() {
+  for filename in ${CONSUMER_DIRECTORY}/*; do
+    [ -e "$filename" ] || continue
+
+    pid=$(basename $filename)
+
+    ps -p $pid >/dev/null
+
+    if [ $? = 1 ]; then
+      echo Deleting pidfile $filename
+
+      cat $filename
+
+      rm $filename
+    fi
+  done
+}
+
 main() {
   configure
   delete_old_logs
+  check_pid_files
 
   add_to_queue "$CONSUMER"
     # start consumer if needed
@@ -88,17 +105,19 @@ consume_queue() {
     if [ $DEBUG == '1' ]; then
       eval "${line}"
     else
-      eval "${line}" >>${QUEUE_BASE_DIRECTORY}/$$.log 2>&1
+      eval "${line}" >>${QUEUE_BASE_DIRECTORY}/$$.log 2>1
     fi
   done
 
-#  echo "consumer done!"
+#  echo "consumer done!" >>${QUEUE_BASE_DIRECTORY}/$$.log 2>1
 }
+
 
 start_new_consumer() {
   # save pidfile
-  PIDFILE=${CONSUMER_DIRECTORY}/$$
-  echo $QUEUE >> ${PIDFILE}
+  PIDFILE=${CONSUMER_DIRECTORY}/$BASHPID
+  echo $0 >> ${PIDFILE}
+#  echo "creating pidfile $PIDFILE"
 
   if [ $1 == 'true' ]; then
     DEBUG=1
