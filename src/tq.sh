@@ -55,7 +55,7 @@ check_pid_files() {
     ps -p $pid >/dev/null
 
     if [ $? = 1 ]; then
-      echo Deleting pidfile $filename
+#      echo Deleting pidfile $filename
 
       cat $filename
 
